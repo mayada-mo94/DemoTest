@@ -1,0 +1,71 @@
+# Build the IPTSOnline component
+# Build and test the ASP.NET Core projects targeting .NET Core.
+#
+# This build definition is triggered by a check-in.
+
+trigger:
+  branches:
+    include:
+      - develop
+      - release/*
+      - master
+
+jobs:
+- job: myJob
+  timeoutInMinutes: 120
+  pool:
+    vmImage: 'vs2017-win2016'
+
+  variables:
+    BuildConfiguration: 'Release'
+    BuildPlatform: 'x64'
+    Major: '1'
+    Minor: '0'
+    Patch: '0'
+    RestoreBuildProjects: '**/*.csproj'
+    NUGET_PACKAGES: $(Pipeline.Workspace)/.nuget/packages
+ 
+  steps:
+
+  - task: Cache@2
+    inputs:
+      key: 'nuget | "$(Agent.OS)" | **/IPTS.UI.Automation.csproj,!**/bin/**'
+      restoreKeys: |
+       nuget | "$(Agent.OS)"
+      path: $(NUGET_PACKAGES)
+    displayName: Cache NuGet packages
+
+  - task: DotNetCoreCLI@2
+    displayName: Restore
+    inputs:
+      command: restore
+      projects: '$(RestoreBuildProjects)'
+      feedsToUse: 'config'
+      includeNuGetOrg: true
+      versioningScheme: 'off'
+      nugetConfigPath: './NuGet.config'
+      verbosityRestore: 'Minimal'
+
+  - task: DotNetCoreCLI@2
+    displayName: Build
+    inputs:
+      projects: '$(RestoreBuildProjects)'
+      arguments: '--configuration $(BuildConfiguration) --no-restore'
+
+  - task: DotNetCoreCLI@2
+    displayName: Publish
+    condition: ne(variables['Build.Reason'], 'PullRequest')
+    inputs:
+      command: publish
+      publishWebProjects: false
+      projects: '$(RestoreBuildProjects)'
+      arguments: '--configuration $(BuildConfiguration) --output $(build.artifactstagingdirectory) --no-build'
+      zipAfterPublish: false
+      modifyOutputPath: false
+      
+  - task: PublishBuildArtifacts@1
+    condition: ne(variables['Build.Reason'], 'PullRequest')
+    displayName: 'Publish Artifact'
+    inputs:
+      PathtoPublish: '$(build.artifactstagingdirectory)'
+
